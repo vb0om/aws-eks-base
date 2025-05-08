@@ -57,6 +57,14 @@ module "eks" {
       type        = "ingress"
       self        = true
     }
+    ingress_allow_all_traffic_cluster_api = {
+      description              = "Allow all traffic from Cluster API"
+      protocol                 = "all"
+      from_port                = 0
+      to_port                  = 0
+      type                     = "ingress"
+      source_security_group_id = module.eks.cluster_security_group_id
+    }
   }
 
   self_managed_node_group_defaults = {

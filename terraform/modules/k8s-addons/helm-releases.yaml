@@ -54,11 +54,12 @@ releases:
     chart_version: 4.10.1
     namespace: ingress-nginx
   - id: istio
-    enabled: false
+    enabled: true
     chart:
     repository: https://istio-release.storage.googleapis.com/charts
     chart_version: 1.22.0
     namespace: istio-system
+    egress_gateway_enabled: true
   - id: keda
     enabled: false
     chart: keda
@@ -66,7 +67,7 @@ releases:
     chart_version: 2.14.2
     namespace: keda
   - id: kiali
-    enabled: false
+    enabled: true
     chart: kiali-server
     repository: https://kiali.org/helm-charts
     chart_version: 1.84.0

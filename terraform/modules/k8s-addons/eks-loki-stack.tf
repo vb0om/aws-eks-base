@@ -18,8 +18,8 @@ loki:
       cpu: 1
       memory: 1Gi
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 100m
+      memory: 500Mi
   config:
     limits_config:
       enforce_metric_name: false
@@ -51,6 +51,13 @@ promtail:
   tolerations:
     - effect: NoSchedule
       operator: Exists
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
 fluent-bit:
   enabled: false

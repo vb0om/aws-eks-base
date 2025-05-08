@@ -66,7 +66,7 @@ prometheus:
               storage: 30Gi
     resources:
       requests:
-        cpu: 200m
+        cpu: 100m
         memory: 1024Mi
       limits:
         cpu: 400m
@@ -120,6 +120,14 @@ grafana:
   sidecar:
     datasources:
       enabled: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
   datasources:
     datasources.yaml:
