@@ -25,6 +25,12 @@ module "eks" {
       service_account_role_arn = module.vpc_cni_irsa.iam_role_arn
       configuration_values = jsonencode({
         enableNetworkPolicy = "true"
+        env = {
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+          WARM_IP_TARGET           = "5"
+          MINIMUM_IP_TARGET        = "2"
+        }
       })
     }
     aws-ebs-csi-driver = {
@@ -50,6 +56,14 @@ module "eks" {
       to_port     = 0
       type        = "ingress"
       self        = true
+    }
+    ingress_allow_all_traffic_cluster_api = {
+      description              = "Allow all traffic from Cluster API"
+      protocol                 = "all"
+      from_port                = 0
+      to_port                  = 0
+      type                     = "ingress"
+      source_security_group_id = module.eks.cluster_security_group_id
     }
   }
 
@@ -96,6 +110,7 @@ module "eks" {
             spec:
               kubelet:
                 config:
+                  maxPods: 110
                   shutdownGracePeriod: 30s
                   featureGates:
                     DisableKubeletCloudCredentialProviders: true

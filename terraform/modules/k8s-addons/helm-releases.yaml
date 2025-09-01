@@ -36,7 +36,7 @@ releases:
     chart_version: 1.14.4
     namespace: external-dns
   - id: external-secrets
-    enabled: true
+    enabled: false
     chart: external-secrets
     repository: https://charts.external-secrets.io
     chart_version: 0.10.0
@@ -54,11 +54,12 @@ releases:
     chart_version: 4.10.1
     namespace: ingress-nginx
   - id: istio
-    enabled: false
+    enabled: true
     chart:
     repository: https://istio-release.storage.googleapis.com/charts
     chart_version: 1.22.0
     namespace: istio-system
+    egress_gateway_enabled: true
   - id: keda
     enabled: false
     chart: keda
@@ -66,7 +67,7 @@ releases:
     chart_version: 2.14.2
     namespace: keda
   - id: kiali
-    enabled: false
+    enabled: true
     chart: kiali-server
     repository: https://kiali.org/helm-charts
     chart_version: 1.84.0
@@ -84,7 +85,7 @@ releases:
     chart_version: 2.10.2
     namespace: loki
   - id: reloader
-    enabled: true
+    enabled: false
     chart: reloader
     repository: https://stakater.github.io/stakater-charts
     chart_version: 1.0.97

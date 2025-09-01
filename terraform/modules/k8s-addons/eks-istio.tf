@@ -1,11 +1,12 @@
 locals {
   istio = {
-    name          = local.helm_releases[index(local.helm_releases.*.id, "istio")].id
-    enabled       = local.helm_releases[index(local.helm_releases.*.id, "istio")].enabled
-    chart         = local.helm_releases[index(local.helm_releases.*.id, "istio")].chart
-    repository    = local.helm_releases[index(local.helm_releases.*.id, "istio")].repository
-    chart_version = local.helm_releases[index(local.helm_releases.*.id, "istio")].chart_version
-    namespace     = local.helm_releases[index(local.helm_releases.*.id, "istio")].namespace
+    name                   = local.helm_releases[index(local.helm_releases.*.id, "istio")].id
+    enabled                = local.helm_releases[index(local.helm_releases.*.id, "istio")].enabled
+    chart                  = local.helm_releases[index(local.helm_releases.*.id, "istio")].chart
+    repository             = local.helm_releases[index(local.helm_releases.*.id, "istio")].repository
+    chart_version          = local.helm_releases[index(local.helm_releases.*.id, "istio")].chart_version
+    namespace              = local.helm_releases[index(local.helm_releases.*.id, "istio")].namespace
+    egress_gateway_enabled = local.helm_releases[index(local.helm_releases.*.id, "istio")].egress_gateway_enabled
   }
   kiali_server = {
     name          = local.helm_releases[index(local.helm_releases.*.id, "kiali")].id
@@ -19,8 +20,8 @@ locals {
 pilot:
   resources:
     requests:
-      cpu: "500m"
-      memory: "2Gi"
+      cpu: "100m"
+      memory: "500Mi"
     limits:
       cpu: "500m"
       memory: "2Gi"
@@ -32,6 +33,10 @@ global:
     autoInject: enabled
     excludeIPRanges: "169.254.169.254/32"
     holdApplicationUntilProxyStarts: true
+meshConfig:
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY             # Deny traffic to outside hosts by default(Only hosts defined by Istio crds)
+  accessLogFile: /dev/stdout        # Add trace logs to istiod components(istiod pod, sidecar)
 VALUES
   kiali_server_prometheus_endpoint             = local.victoria_metrics_k8s_stack.enabled ? "http://vmsingle-${local.victoria_metrics_k8s_stack.name}.${local.victoria_metrics_k8s_stack.namespace}:8429" : "http://${local.kube_prometheus_stack.name}-prometheus.${local.kube_prometheus_stack.namespace}:9090"
   kiali_server_grafana_endpoint                = local.victoria_metrics_k8s_stack.enabled ? "http://${local.victoria_metrics_k8s_stack.name}-grafana.${local.victoria_metrics_k8s_stack.namespace}" : "http://${local.kube_prometheus_stack.name}-grafana.${local.kube_prometheus_stack.namespace}"
@@ -93,6 +98,37 @@ spec:
   - path: /stats/prometheus
     targetPort: http-envoy-prom
     interval: 15s
+VALUES
+  istio_egress_gateway_values                  = <<VALUES
+defaults:
+  service:
+    type: ClusterIP
+  labels:
+   istio: egressgateway
+VALUES
+  istio_egress_gateway_manifest                   = <<VALUES
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: istio-egressgateway
+spec:
+  selector:
+    istio: egressgateway
+  servers:
+  - hosts:
+    - "*"
+    port:
+      name: http-port
+      number: 80
+      protocol: HTTP
+  - hosts:
+    - "*"
+    port:
+      name: https-port
+      number: 443
+      protocol: HTTPS
+    tls:
+      mode: PASSTHROUGH
 VALUES
 }
 
@@ -215,6 +251,36 @@ module "istio_system_namespace" {
               except = [
                 "169.254.169.254/32"
               ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      name         = "allow-ingress-egress-gateway"
+      policy_types = ["Ingress"]
+      pod_selector = {
+        match_expressions = {
+          key      = "istio"
+          operator = "In"
+          values   = ["egressgateway"]
+        }
+      }
+      ingress = {
+        ports = [
+          {
+            port     = "80"
+            protocol = "TCP"
+          },
+          {
+            port     = "443"
+            protocol = "TCP"
+          }
+        ]
+        from = [
+          {
+            ip_block = {
+              cidr = "0.0.0.0/0"
             }
           }
         ]
@@ -352,6 +418,23 @@ resource "helm_release" "istiod" {
   depends_on = [helm_release.istio_base, kubectl_manifest.kube_prometheus_stack_operator_crds]
 }
 
+resource "helm_release" "istio-egressgateway" {
+  count = local.istio.egress_gateway_enabled && local.istio.enabled ? 1 : 0
+
+  name        = "istio-egressgateway"
+  chart       = "gateway"
+  repository  = local.istio.repository
+  version     = local.istio.chart_version
+  namespace   = module.istio_system_namespace[count.index].name
+  max_history = var.helm_release_history_size
+
+  values = [
+    local.istio_egress_gateway_values
+  ]
+
+  depends_on = [helm_release.istiod]
+}
+
 resource "kubectl_manifest" "istio_prometheus_service_monitor_cp" {
   count              = local.istio.enabled ? 1 : 0
   yaml_body          = local.istio_prometheus_service_monitor_cp_manifest
@@ -364,6 +447,13 @@ resource "kubectl_manifest" "istio_prometheus_service_monitor_dp" {
   yaml_body          = local.istio_prometheus_service_monitor_dp_manifest
   override_namespace = module.istio_system_namespace[count.index].name
   depends_on         = [helm_release.istiod]
+}
+
+resource "kubectl_manifest" "istio_egress_gateway" {
+  count              = local.istio.egress_gateway_enabled && local.istio.enabled ? 1 : 0
+  yaml_body          = local.istio_egress_gateway_manifest
+  override_namespace = module.istio_system_namespace[count.index].name
+  depends_on         = [helm_release.istio_base, helm_release.istiod, helm_release.istio-egressgateway]
 }
 
 resource "helm_release" "kiali" {
